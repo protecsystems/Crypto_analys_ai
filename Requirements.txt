@@ -1,0 +1,6 @@
+requests
+pandas
+ta
+python-telegram-bot~=20.0
+transformers
+torch                 # إلزامي لتشغيل النموذج محليًا
