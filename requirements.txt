@@ -2,3 +2,6 @@ python-telegram-bot==20.3
 aiohttp
 requests
 pandas
+ta
+transformers
+torch
