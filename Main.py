@@ -60,6 +60,7 @@ async def handle_analysis(update: Update, context: ContextTypes.DEFAULT_TYPE):
 app = ApplicationBuilder().token(TOKEN).build()
 app.add_handler(CommandHandler("تحليل", handle_analysis))
 
-    if __name__ == "__main__":
-    import asyncio
+import asyncio
+
+if __name__ == "__main__":
     asyncio.run(app.run_polling())
