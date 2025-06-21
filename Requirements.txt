@@ -4,3 +4,5 @@ ta
 python-telegram-bot~=20.0
 transformers
 torch                 # إلزامي لتشغيل النموذج محليًا
+python-telegram-bot==20.3
+aiohttp
