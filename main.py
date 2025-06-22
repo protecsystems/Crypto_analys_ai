@@ -1,13 +1,20 @@
 import requests
 import pandas as pd
 import ta
+import openai
+import os
+import asyncio
+
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
-from transformers import pipeline
 
-TOKEN = "7520322508:AAHFx4G7S25rcL0uiWtP2SKvPOL1S3jAUi0"
+# مفتاح تيليغرام وOpenAI من البيئة
+TOKEN = os.environ.get("TOKEN")
+openai.api_key = os.environ.get("OPENAI_API_KEY")
 
-# جلب بيانات العملة من CoinGecko (7 أيام)
+app = ApplicationBuilder().token(TOKEN).build()
+
+# 1. جلب بيانات العملة من CoinGecko
 def fetch_market_data(symbol: str):
     url = f"https://api.coingecko.com/api/v3/coins/{symbol}/market_chart?vs_currency=usd&days=7"
     r = requests.get(url)
@@ -18,7 +25,7 @@ def fetch_market_data(symbol: str):
     prices.set_index("time", inplace=True)
     return prices
 
-# تحليل فني
+# 2. تحليل RSI و MACD
 def analyze_tech(data: pd.DataFrame):
     df = data.copy()
     df["rsi"] = ta.momentum.RSIIndicator(df["price"], window=14).rsi()
@@ -26,18 +33,24 @@ def analyze_tech(data: pd.DataFrame):
     latest = df.iloc[-1]
     return latest["price"], latest["rsi"], latest["macd"]
 
-# توقع ذكي باستخدام نموذج GPT محلي
-generator = pipeline("text-generation", model="tiiuae/falcon-7b-instruct", device=-1)
-
-def ai_prediction(symbol: str, price: float, rsi: float, macd: float):
+# 3. توليد توقع بالذكاء الاصطناعي (OpenAI)
+def generate_ai_prediction(symbol: str, price: float, rsi: float, macd: float):
     prompt = (
-        f"عملة {symbol.upper()}, السعر الحالي ${price:.2f}, RSI={rsi:.1f}, MACD={macd:.2f}. "
-        f"توقع حركة السعر خلال ٢٤ ساعة القادمة مع تفسير منطقي."
+        f"عملة {symbol.upper()}:\n"
+        f"السعر الحالي: {price:.2f} USD\n"
+        f"RSI: {rsi:.1f}, MACD diff: {macd:.2f}\n"
+        "بناءً على هذه المعطيات، ما هو التوقع خلال 24 ساعة القادمة؟"
     )
-    result = generator(prompt, max_length=100, do_sample=True, temperature=0.7)
-    return result[0]["generated_text"]
+    response = openai.ChatCompletion.create(
+        model="gpt-3.5-turbo",
+        messages=[
+            {"role": "system", "content": "أنت محلل مالي خبير في العملات الرقمية."},
+            {"role": "user", "content": prompt}
+        ]
+    )
+    return response.choices[0].message.content
 
-# دالة الرد على /تحليل
+# 4. الأمر: /تحليل
 async def handle_analysis(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
         await update.message.reply_text("📌 الرجاء كتابة اسم العملة بعد الأمر. مثال:\n/تحليل bitcoin")
@@ -48,19 +61,21 @@ async def handle_analysis(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"❌ تعذر جلب بيانات '{symbol}'. تأكد من الاسم.")
         return
     price, rsi, macd = analyze_tech(data)
-    ai_resp = ai_prediction(symbol, price, rsi, macd)
-    msg = (
-        f"💰 سعر {symbol.upper()} الحالي: ${price:.2f}\n"
-        f"📉 RSI={rsi:.1f}, MACD diff={macd:.2f}\n\n"
-        f"{ai_resp}"
+    analysis_text = (
+        f"💰 السعر الحالي: ${price:.2f}\n"
+        f"📉 RSI: {rsi:.1f}\n"
+        f"📊 MACD diff: {macd:.2f}\n\n"
+        f"🤖 الذكاء الاصطناعي يتوقع:\n"
     )
-    await update.message.reply_text(msg)
+    try:
+        prediction = generate_ai_prediction(symbol, price, rsi, macd)
+    except Exception as e:
+        prediction = "حدث خطأ أثناء الاتصال بخدمة الذكاء الاصطناعي."
 
-# إعداد البوت وتشغيله
-app = ApplicationBuilder().token(TOKEN).build()
+    await update.message.reply_text(analysis_text + prediction)
+
 app.add_handler(CommandHandler("تحليل", handle_analysis))
 
-import asyncio
-
+# 5. تشغيل البوت
 if __name__ == "__main__":
     asyncio.run(app.run_polling())
