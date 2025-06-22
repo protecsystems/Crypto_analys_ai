@@ -8,13 +8,13 @@ import asyncio
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
-# مفتاح تيليغرام وOpenAI من البيئة
+# مفاتيح من البيئة
 TOKEN = os.environ.get("TOKEN")
 openai.api_key = os.environ.get("OPENAI_API_KEY")
 
 app = ApplicationBuilder().token(TOKEN).build()
 
-# 1. جلب بيانات العملة من CoinGecko
+# 1. جلب البيانات من CoinGecko
 def fetch_market_data(symbol: str):
     url = f"https://api.coingecko.com/api/v3/coins/{symbol}/market_chart?vs_currency=usd&days=7"
     r = requests.get(url)
@@ -33,27 +33,27 @@ def analyze_tech(data: pd.DataFrame):
     latest = df.iloc[-1]
     return latest["price"], latest["rsi"], latest["macd"]
 
-# 3. توليد توقع بالذكاء الاصطناعي (OpenAI)
+# 3. توقع الذكاء الاصطناعي
 def generate_ai_prediction(symbol: str, price: float, rsi: float, macd: float):
     prompt = (
-        f"عملة {symbol.upper()}:\n"
+        f"تحليل عملة {symbol.upper()}:\n"
         f"السعر الحالي: {price:.2f} USD\n"
         f"RSI: {rsi:.1f}, MACD diff: {macd:.2f}\n"
-        "بناءً على هذه المعطيات، ما هو التوقع خلال 24 ساعة القادمة؟"
+        "بناءً على هذه البيانات، ما هو توقعك لحركة السعر خلال 24 ساعة القادمة؟"
     )
     response = openai.ChatCompletion.create(
         model="gpt-3.5-turbo",
         messages=[
-            {"role": "system", "content": "أنت محلل مالي خبير في العملات الرقمية."},
+            {"role": "system", "content": "أنت محلل مالي خبير في سوق العملات الرقمية."},
             {"role": "user", "content": prompt}
         ]
     )
     return response.choices[0].message.content
 
-# 4. الأمر: /تحليل
+# 4. أمر /analyze
 async def handle_analysis(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
-        await update.message.reply_text("📌 الرجاء كتابة اسم العملة بعد الأمر. مثال:\n/تحليل bitcoin")
+        await update.message.reply_text("📌 الرجاء كتابة اسم العملة بعد الأمر. مثال:\n/analyze bitcoin")
         return
     symbol = context.args[0].lower()
     data = fetch_market_data(symbol)
@@ -70,12 +70,12 @@ async def handle_analysis(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         prediction = generate_ai_prediction(symbol, price, rsi, macd)
     except Exception as e:
-        prediction = "حدث خطأ أثناء الاتصال بخدمة الذكاء الاصطناعي."
-
+        prediction = "❌ حدث خطأ أثناء الاتصال بخدمة الذكاء الاصطناعي."
     await update.message.reply_text(analysis_text + prediction)
 
-app.add_handler(CommandHandler("تحليل", handle_analysis))
+# 5. إضافة الأمر
+app.add_handler(CommandHandler("analyze", handle_analysis))
 
-# 5. تشغيل البوت
+# 6. تشغيل البوت
 if __name__ == "__main__":
     asyncio.run(app.run_polling())
