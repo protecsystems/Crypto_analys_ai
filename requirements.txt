@@ -3,5 +3,4 @@ aiohttp
 requests
 pandas
 ta
-transformers
-torch
+openai
